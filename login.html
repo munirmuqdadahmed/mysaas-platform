@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تسجيل الدخول</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@500;700;900&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Tajawal', sans-serif; direction: rtl;
+            background: #060608; color: #fff; margin: 0;
+            display: flex; align-items: center; justify-content: center;
+            min-height: 100vh; padding: 20px;
+        }
+        .card {
+            background: #111116; border: 1px solid #1e1e28; border-radius: 16px;
+            padding: 30px 24px; max-width: 380px; width: 100%;
+        }
+        h1 { text-align: center; color: #ffd700; font-size: 1.4rem; margin-bottom: 20px; }
+        label { display: block; font-size: 0.8rem; color: #ccc; margin-bottom: 5px; margin-top: 12px; }
+        input {
+            width: 100%; padding: 11px; background: #0d0d11; border: 1px solid #333;
+            border-radius: 8px; color: #fff; font-size: 0.95rem; font-family: inherit;
+        }
+        button {
+            width: 100%; margin-top: 22px; padding: 13px; background: #ffd700;
+            color: #000; border: none; border-radius: 8px; font-weight: 900;
+            font-size: 1rem; cursor: pointer; font-family: inherit;
+        }
+        button:disabled { opacity: 0.6; }
+        .error { color: #ef4444; font-size: 0.82rem; margin-top: 10px; text-align: center; }
+        .link { text-align: center; margin-top: 16px; font-size: 0.85rem; }
+        .link a { color: #38bdf8; text-decoration: none; }
+        .business-pick {
+            background: #0d0d11; border: 1px solid #333; border-radius: 8px;
+            padding: 12px; margin-top: 10px; cursor: pointer; display: flex;
+            justify-content: space-between; align-items: center;
+        }
+        .business-pick:hover { border-color: #ffd700; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🔑 تسجيل الدخول</h1>
+
+        <div id="loginForm">
+            <label>البريد الإلكتروني:</label>
+            <input type="email" id="email" placeholder="you@example.com">
+            <label>كلمة المرور:</label>
+            <input type="password" id="password" placeholder="••••••">
+            <button id="submitBtn" onclick="handleLogin()">دخول</button>
+            <div id="errorMsg" class="error"></div>
+            <div class="link">ماعندك حساب؟ <a href="signup.html">سجّل عمل جديد</a></div>
+        </div>
+
+        <!-- تظهر بس لو المستخدم عنده أكثر من عمل واحد -->
+        <div id="businessPicker" style="display:none;">
+            <p style="text-align:center;color:#ccc;font-size:0.85rem;margin-bottom:10px;">
+                اختر العمل اللي تريد تدخله:
+            </p>
+            <div id="businessList"></div>
+        </div>
+    </div>
+
+    <script src="saas-core.js"></script>
+    <script>
+        let pendingBusinesses = [];
+
+        async function handleLogin() {
+            const email    = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+            const errEl    = document.getElementById('errorMsg');
+            const btn      = document.getElementById('submitBtn');
+            errEl.innerText = '';
+
+            if (!email || !password) return errEl.innerText = '⚠️ أدخل البريد وكلمة المرور.';
+
+            btn.disabled = true;
+            btn.innerText = 'جاري الدخول...';
+
+            try {
+                const { businesses } = await logIn(email, password);
+
+                if (businesses.length === 0) {
+                    errEl.innerText = '⚠️ حسابك مو مرتبط بأي عمل حاليًا.';
+                    btn.disabled = false; btn.innerText = 'دخول';
+                    return;
+                }
+
+                if (businesses.length === 1) {
+                    setCurrentBusinessId(businesses[0].businessId);
+                    window.location.href = 'dashboard.html';
+                    return;
+                }
+
+                // أكثر من عمل - نعرض قائمة اختيار
+                pendingBusinesses = businesses;
+                document.getElementById('loginForm').style.display = 'none';
+                document.getElementById('businessPicker').style.display = 'block';
+                document.getElementById('businessList').innerHTML = businesses.map((b, i) =>
+                    `<div class="business-pick" onclick="pickBusiness(${i})">
+                        <strong>${b.name}</strong>
+                        <span style="color:#888;font-size:0.75rem;">${b.role}</span>
+                    </div>`
+                ).join('');
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerText = 'دخول';
+                errEl.innerText = translateAuthError(err.code);
+            }
+        }
+
+        function pickBusiness(idx) {
+            setCurrentBusinessId(pendingBusinesses[idx].businessId);
+            window.location.href = 'dashboard.html';
+        }
+
+        function translateAuthError(code) {
+            const map = {
+                'auth/user-not-found':   '⚠️ ماكو حساب بهذا البريد.',
+                'auth/wrong-password':   '⚠️ كلمة المرور غلط.',
+                'auth/invalid-email':    '⚠️ صيغة البريد غير صحيحة.',
+                'auth/too-many-requests':'⚠️ محاولات كثيرة، جرب بعد شوي.',
+            };
+            return map[code] || ('⚠️ صار خطأ: ' + code);
+        }
+    </script>
+</body>
+</html>
